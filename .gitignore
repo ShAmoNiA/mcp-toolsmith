@@ -7,4 +7,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
-
+.pypi-install/
+.testpypi-install/
+/tools.json
+/mcp-toolsmith-clean.zip
