@@ -1,0 +1,24 @@
+{
+  "tools": [
+    {
+      "name": "search_docs",
+      "description": "Search documentation for a specific user question.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Question or topic to search for."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return.",
+            "default": 5
+          }
+        },
+        "required": ["query"]
+      }
+    }
+  ]
+}
+
