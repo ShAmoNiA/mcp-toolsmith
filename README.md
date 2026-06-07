@@ -17,7 +17,7 @@ tool metadata.
 ## Install
 
 ```bash
-pip install mcp-toolsmith==0.1.0a1
+pip install mcp-toolsmith
 ```
 
 For local development:
