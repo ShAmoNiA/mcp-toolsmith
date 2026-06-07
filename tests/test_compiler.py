@@ -36,6 +36,10 @@ def test_compile_file_to_mcp_discovers_function(tmp_path):
     tools_file = tmp_path / "tools.py"
     tools_file.write_text(
         '''
+from mcp_toolsmith import tool
+
+
+@tool
 def get_weather(city: str, unit: str = "celsius") -> str:
     """Get current weather for a city.
 
@@ -72,6 +76,59 @@ def get_weather(city: str, unit: str = "celsius") -> str:
             },
         }
     ]
+
+
+def test_compile_file_supports_decorated_tools(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+from mcp_toolsmith import tool
+
+
+@tool(name="search_project_docs", description="Search project docs and return matching document IDs.")
+def search_docs(query: str, limit: int = 5) -> list[str]:
+    """Search project documentation by natural language query.
+
+    Args:
+        query: Question or topic to search for.
+        limit: Maximum number of results to return.
+    """
+    return []
+
+
+def normalize_query(query: str) -> str:
+    """Normalize helper input."""
+    return query.strip().lower()
+''',
+        encoding="utf-8",
+    )
+
+    tools = compile_file(tools_file, target="mcp", execute=True)
+
+    assert len(tools) == 1
+    assert tools[0]["name"] == "search_project_docs"
+    assert tools[0]["description"] == "Search project docs and return matching document IDs."
+    assert set(tools[0]["inputSchema"]["properties"]) == {"query", "limit"}
+
+
+def test_compile_file_all_public_keeps_legacy_public_function_discovery(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+def normalize_query(query: str) -> str:
+    """Normalize helper input.
+
+    Args:
+        query: Query to normalize.
+    """
+    return query.strip().lower()
+''',
+        encoding="utf-8",
+    )
+
+    tools = compile_file(tools_file, target="mcp", execute=True, all_public=True)
+
+    assert [tool["name"] for tool in tools] == ["normalize_query"]
 
 
 def test_compile_tool_to_openai_accepts_pydantic_model():

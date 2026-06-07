@@ -24,10 +24,14 @@ def compile_file(
     target: Target = "mcp",
     *,
     execute: bool = False,
+    all_public: bool = False,
 ) -> list[dict[str, Any]]:
     """Compile all tools discovered in a Python or MCP JSON file."""
 
-    return compile_tools(load_tool_schemas(path, execute_python=execute), target=target)
+    return compile_tools(
+        load_tool_schemas(path, execute_python=execute, all_public=all_public),
+        target=target,
+    )
 
 
 def compile_tool(

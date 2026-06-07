@@ -41,6 +41,10 @@ def test_cli_audit_python_execute_opt_in(tmp_path):
     tools_file = tmp_path / "tools.py"
     tools_file.write_text(
         '''
+from mcp_toolsmith import tool
+
+
+@tool
 def search_docs(query: str) -> str:
     """Search documentation for a specific user question.
 
@@ -56,6 +60,45 @@ def search_docs(query: str) -> str:
 
     assert result.exit_code == 0
     assert "search_docs" in result.output
+
+
+def test_cli_audit_python_execute_ignores_public_helpers_by_default(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+def normalize_query(query: str) -> str:
+    """Normalize helper input."""
+    return query.strip().lower()
+''',
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["audit", str(tools_file), "--execute"])
+
+    assert result.exit_code == 0
+    assert "No tools were discovered" in result.output
+    assert "normalize_query" not in result.output
+
+
+def test_cli_audit_all_public_discovers_public_helpers(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+def normalize_query(query: str) -> str:
+    """Normalize helper input.
+
+    Args:
+        query: Query to normalize.
+    """
+    return query.strip().lower()
+''',
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["audit", str(tools_file), "--execute", "--all-public"])
+
+    assert result.exit_code == 0
+    assert "normalize_query" in result.output
 
 
 def test_cli_compile_json_without_execute(tmp_path):
@@ -84,4 +127,3 @@ def test_cli_compile_json_without_execute(tmp_path):
 
     assert result.exit_code == 0
     assert '"type": "function"' in result.output
-

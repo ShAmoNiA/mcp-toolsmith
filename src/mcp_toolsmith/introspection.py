@@ -23,7 +23,12 @@ class UnsafePythonExecutionError(RuntimeError):
     """Raised when a Python file would need to be executed without opt-in."""
 
 
-def load_tool_schemas(path: str | Path, *, execute_python: bool = False) -> list[ToolSchema]:
+def load_tool_schemas(
+    path: str | Path,
+    *,
+    execute_python: bool = False,
+    all_public: bool = False,
+) -> list[ToolSchema]:
     """Load provider-neutral tool schemas from a Python or JSON file."""
 
     source_path = Path(path)
@@ -33,7 +38,7 @@ def load_tool_schemas(path: str | Path, *, execute_python: bool = False) -> list
     if source_path.suffix.lower() == ".json":
         return _load_json_tool_schemas(source_path)
     if source_path.suffix.lower() != ".py":
-        raise ValueError("Only .py and .json inputs are supported in v0.1.0")
+        raise ValueError("Only .py and .json inputs are supported")
     if not execute_python:
         raise UnsafePythonExecutionError(
             "Refusing to execute Python source. Use --execute only for trusted files."
@@ -41,8 +46,9 @@ def load_tool_schemas(path: str | Path, *, execute_python: bool = False) -> list
 
     module = _load_module_from_path(source_path)
     tools: list[ToolSchema] = []
-    tools.extend(_discover_functions(module, source_path))
-    tools.extend(_discover_pydantic_models(module, source_path))
+    tools.extend(_discover_functions(module, source_path, all_public=all_public))
+    if all_public:
+        tools.extend(_discover_pydantic_models(module, source_path))
     return tools
 
 
@@ -50,6 +56,9 @@ def function_to_tool_schema(function: Callable[..., Any], source: str | None = N
     """Convert a Python function into a provider-neutral tool schema."""
 
     description = _first_docstring_paragraph(inspect.getdoc(function) or "")
+    metadata = getattr(function, "__mcp_toolsmith_tool__", {})
+    tool_name = metadata.get("name") or function.__name__
+    tool_description = metadata.get("description") or description
     param_descriptions = _parse_param_descriptions(inspect.getdoc(function) or "")
     schema = _schema_from_function(function)
 
@@ -59,8 +68,8 @@ def function_to_tool_schema(function: Callable[..., Any], source: str | None = N
             properties[param_name]["description"] = param_description
 
     return ToolSchema(
-        name=function.__name__,
-        description=description,
+        name=tool_name,
+        description=tool_description,
         input_schema=schema,
         source=source or _callable_source(function),
         source_kind="function",
@@ -146,13 +155,19 @@ def _coerce_json_tool_definitions(data: Any) -> list[dict[str, Any]]:
     return definitions
 
 
-def _discover_functions(module: ModuleType, path: Path) -> list[ToolSchema]:
+def _discover_functions(module: ModuleType, path: Path, *, all_public: bool = False) -> list[ToolSchema]:
     tools: list[ToolSchema] = []
     for name, value in vars(module).items():
         if name.startswith("_"):
             continue
-        if inspect.isfunction(value) and value.__module__ == module.__name__:
-            tools.append(function_to_tool_schema(value, source=f"{path}:{name}"))
+        if not inspect.isfunction(value):
+            continue
+        if value.__module__ != module.__name__:
+            continue
+        is_decorated = hasattr(value, "__mcp_toolsmith_tool__")
+        if not is_decorated and not all_public:
+            continue
+        tools.append(function_to_tool_schema(value, source=f"{path}:{name}"))
     return tools
 
 

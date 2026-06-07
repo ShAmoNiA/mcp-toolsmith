@@ -2,9 +2,9 @@
 
 Audit and compile Python tool schemas for LLM agents.
 
-**Alpha:** JSON tool files are safe by default. Python files require `--execute`
-and should only be used with trusted code. The public API may change before
-`1.0.0`.
+**Pre-1.0:** JSON tool files are safe by default. Python files require
+`--execute` and should only be used with trusted code. The public API may change
+before `1.0.0`.
 
 `mcp-toolsmith` is a small Python-first CLI and library for checking whether tool
 metadata is usable by LLM agents, then compiling those tools into MCP or
@@ -100,32 +100,47 @@ mcp-toolsmith compile tools.py --target mcp --execute
 
 Use `--execute` only for trusted files.
 
-Trusted Python files can contain top-level functions and Pydantic v2 models:
+By default, Python discovery only includes functions decorated with `@tool`:
 
 ```python
-from pydantic import BaseModel, Field
+from mcp_toolsmith import tool
 
 
-def get_weather(city: str, unit: str = "celsius") -> str:
-    """Get current weather for a city.
+@tool
+def search_docs(query: str, limit: int = 5) -> list[str]:
+    """Search project documentation by natural language query.
 
     Args:
-        city: City and country, such as Madrid, Spain.
-        unit: Temperature unit to return.
+        query: Question or topic to search for.
+        limit: Maximum number of results to return.
     """
-    return "sunny"
-
-
-class SearchDocsInput(BaseModel):
-    """Search project documentation by natural language query."""
-
-    query: str = Field(description="Question or topic to search for.")
-    limit: int = Field(default=5, description="Maximum number of results.")
+    return []
 ```
 
-In this alpha, trusted Python discovery includes every public top-level function
-and every public Pydantic model in the file. Decorator-based discovery is planned
-for a later release.
+Use decorator arguments to override the generated tool name or description:
+
+```python
+from mcp_toolsmith import tool
+
+
+@tool(
+    name="search_project_docs",
+    description="Search project docs and return matching document IDs.",
+)
+def search_docs(query: str, limit: int = 5) -> list[str]:
+    """Search project documentation by natural language query."""
+    return []
+```
+
+Use `--all-public` to include every public top-level function and Pydantic model:
+
+```bash
+mcp-toolsmith audit tools.py --execute --all-public
+mcp-toolsmith compile tools.py --target mcp --execute --all-public
+```
+
+`--all-public` is mainly a compatibility path for early alpha behavior. For new
+Python tool files, prefer `@tool`.
 
 ## Python API
 
@@ -146,6 +161,13 @@ report = audit_file("tools.py", execute=True)
 mcp_tools = compile_file("tools.py", target="mcp", execute=True)
 ```
 
+To opt into broad Python discovery:
+
+```python
+report = audit_file("tools.py", execute=True, all_public=True)
+mcp_tools = compile_file("tools.py", target="mcp", execute=True, all_public=True)
+```
+
 ## Checks
 
 | Check | Why it matters |
@@ -161,7 +183,6 @@ mcp_tools = compile_file("tools.py", target="mcp", execute=True)
 
 | Version | Goal |
 | --- | --- |
-| `0.1.0a1` | Safe-by-default CLI, Python/Pydantic discovery behind `--execute`, audit report, MCP/OpenAI compile |
 | `0.2.0` | Decorator-based Python tool discovery |
 | `0.3.0` | OpenAPI input and richer JSON Schema validation |
 | `0.4.0` | Provider compatibility profiles for Anthropic, Gemini, and OpenAI |

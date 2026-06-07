@@ -36,7 +36,7 @@ Then test installation in a clean virtual environment:
 ```bash
 python -m venv .test-venv
 .test-venv\Scripts\activate
-python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mcp-toolsmith==0.1.0a1
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mcp-toolsmith==0.2.0
 mcp-toolsmith --help
 ```
 
@@ -48,4 +48,3 @@ twine upload dist/*
 
 Do not commit `dist/`, `build/`, caches, virtual environments, or source
 archives containing `.git/`.
-

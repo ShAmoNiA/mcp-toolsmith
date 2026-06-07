@@ -45,11 +45,19 @@ _POISON_PATTERNS = {
 }
 
 
-def audit_file(path: str | Path, *, execute: bool = False) -> AuditReport:
+def audit_file(
+    path: str | Path,
+    *,
+    execute: bool = False,
+    all_public: bool = False,
+) -> AuditReport:
     """Audit all tools discovered in a Python or MCP JSON file."""
 
     source = Path(path)
-    return audit_tools(load_tool_schemas(source, execute_python=execute), source=source)
+    return audit_tools(
+        load_tool_schemas(source, execute_python=execute, all_public=all_public),
+        source=source,
+    )
 
 
 def audit_tool(tool: ToolSchema | Callable[..., Any] | type[BaseModel] | dict[str, Any]) -> ToolAudit:
@@ -74,7 +82,10 @@ def audit_tools(tools: list[ToolSchema], source: Path | None = None) -> AuditRep
                 rule_id="catalog.no_tools",
                 severity="warning",
                 message="No tools were discovered.",
-                suggestion="Add top-level functions, Pydantic models, or MCP JSON tool definitions.",
+                suggestion=(
+                    "Add MCP JSON definitions, decorate trusted Python functions with @tool, "
+                    "or use --all-public."
+                ),
             )
         )
     return AuditReport(tools=tool_audits, findings=findings, source=source)

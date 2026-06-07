@@ -2,6 +2,7 @@
 
 from mcp_toolsmith.auditor import audit_file, audit_tool, audit_tools
 from mcp_toolsmith.compiler import compile_file, compile_tool, compile_tools
+from mcp_toolsmith.decorators import tool
 from mcp_toolsmith.introspection import UnsafePythonExecutionError
 from mcp_toolsmith.models import AuditReport, Finding, ToolAudit, ToolSchema
 
@@ -17,6 +18,7 @@ __all__ = [
     "compile_file",
     "compile_tool",
     "compile_tools",
+    "tool",
 ]
 
-__version__ = "0.1.0a1"
+__version__ = "0.2.0"

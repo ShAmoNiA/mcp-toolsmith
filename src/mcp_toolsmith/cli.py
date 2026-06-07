@@ -26,7 +26,11 @@ TargetOption = Annotated[
 ]
 ExecuteOption = Annotated[
     bool,
-    typer.Option("--execute", help="Execute trusted Python files to discover functions and Pydantic models."),
+    typer.Option("--execute", help="Execute trusted Python files to discover decorated tools."),
+]
+AllPublicOption = Annotated[
+    bool,
+    typer.Option("--all-public", help="Discover every public top-level function and Pydantic model."),
 ]
 
 
@@ -35,11 +39,12 @@ def audit(
     path: ToolFileArgument,
     json_output: JsonOutputOption = False,
     execute: ExecuteOption = False,
+    all_public: AllPublicOption = False,
 ) -> None:
     """Audit Python functions, Pydantic models, or MCP tool definitions."""
 
     try:
-        report = audit_file(path, execute=execute)
+        report = audit_file(path, execute=execute, all_public=all_public)
     except Exception as exc:
         console.print(f"[red]ERROR[/red] {exc}")
         raise typer.Exit(code=2) from exc
@@ -57,11 +62,12 @@ def compile_command(
     path: ToolFileArgument,
     target: TargetOption = "mcp",
     execute: ExecuteOption = False,
+    all_public: AllPublicOption = False,
 ) -> None:
     """Compile discovered tools into provider-specific schemas."""
 
     try:
-        output = compile_file(path, target=target, execute=execute)
+        output = compile_file(path, target=target, execute=execute, all_public=all_public)
     except Exception as exc:
         console.print(f"[red]ERROR[/red] {exc}")
         raise typer.Exit(code=2) from exc
