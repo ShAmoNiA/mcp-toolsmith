@@ -2,12 +2,17 @@
 
 Audit and compile Python tool schemas for LLM agents.
 
-**Alpha:** JSON tools are safe by default. Python files require `--execute` and
-should only be used with trusted code.
+**Alpha:** JSON tool files are safe by default. Python files require `--execute`
+and should only be used with trusted code. The public API may change before
+`1.0.0`.
 
 `mcp-toolsmith` is a small Python-first CLI and library for checking whether tool
 metadata is usable by LLM agents, then compiling those tools into MCP or
 OpenAI-style tool definitions.
+
+It helps catch problems such as vague tool names, missing descriptions,
+oversized schemas, overlapping tools, and prompt-injection-like language inside
+tool metadata.
 
 ## Install
 
@@ -23,13 +28,67 @@ python -m pip install -e ".[dev]"
 
 ## Usage
 
+### Audit JSON tool definitions
+
 JSON tool definitions are safe by default:
 
 ```bash
 mcp-toolsmith audit tools.json
+```
+
+Example JSON input:
+
+```json
+{
+  "tools": [
+    {
+      "name": "search_docs",
+      "description": "Search project documentation by natural language query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Question or topic to search for."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return.",
+            "default": 5
+          }
+        },
+        "required": ["query"]
+      }
+    }
+  ]
+}
+```
+
+Example audit output:
+
+```text
+OK Audited 1 tool(s) from tools.json
+Errors: 0  Warnings: 0
+
+search_docs [mcp] ~55 schema tokens
+  No findings
+```
+
+### Compile tools
+
+Compile to MCP-style tool definitions:
+
+```bash
 mcp-toolsmith compile tools.json --target mcp
+```
+
+Compile to OpenAI-style function definitions:
+
+```bash
 mcp-toolsmith compile tools.json --target openai
 ```
+
+### Audit trusted Python files
 
 Python files are executable source code, so `mcp-toolsmith` refuses to import
 them unless you opt in:
@@ -87,45 +146,29 @@ report = audit_file("tools.py", execute=True)
 mcp_tools = compile_file("tools.py", target="mcp", execute=True)
 ```
 
-## What It Checks
+## Checks
 
 | Check | Why it matters |
 | --- | --- |
-| Vague tool names | Agents pick the wrong tool when names are generic |
-| Missing descriptions | Tool selection depends heavily on descriptions |
+| Vague tool names | Agents may pick the wrong tool when names are generic |
+| Missing descriptions | Tool selection depends heavily on clear descriptions |
 | Missing argument descriptions | Models need argument-level context |
-| Oversized schemas | Large schemas cost tokens and distract smaller models |
+| Oversized schemas | Large schemas cost tokens and can distract smaller models |
 | Overlapping tools | Similar tools make tool choice unstable |
 | Tool-poisoning language | Tool metadata is part of the prompt surface |
 
-## Release Roadmap
+## Roadmap
 
 | Version | Goal |
 | --- | --- |
 | `0.1.0a1` | Safe-by-default CLI, Python/Pydantic discovery behind `--execute`, audit report, MCP/OpenAI compile |
-| `0.2.0` | OpenAPI input and richer JSON Schema validation |
-| `0.3.0` | Provider compatibility profiles for Anthropic/Gemini/OpenAI |
-| `0.4.0` | Deterministic schema compaction and rewriting |
-| `0.5.0` | GitHub Action for schema linting in CI |
+| `0.2.0` | Decorator-based Python tool discovery |
+| `0.3.0` | OpenAPI input and richer JSON Schema validation |
+| `0.4.0` | Provider compatibility profiles for Anthropic, Gemini, and OpenAI |
+| `0.5.0` | Deterministic schema compaction and rewriting |
 | `1.0.0` | Stable public API and compatibility matrix |
 
-## Publishing
+## License
 
-Build locally:
+MIT
 
-```bash
-python -m build
-twine check dist/*
-```
-
-Publish to TestPyPI first:
-
-```bash
-twine upload --repository testpypi dist/*
-```
-
-When the test install works, publish the same artifacts to PyPI:
-
-```bash
-twine upload dist/*
-```
