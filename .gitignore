@@ -8,6 +8,9 @@ build/
 dist/
 *.egg-info/
 .pypi-install/
+.pypi-*-install/
 .testpypi-install/
+.testpypi-*-install/
 /tools.json
+/tools.py
 /mcp-toolsmith-clean.zip

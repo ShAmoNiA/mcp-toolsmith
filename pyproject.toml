@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mcp-toolsmith"
 version = "0.2.0"
-description = "Audit and compile Python tool schemas for LLM agents."
+description = "Audit and compile Python tool schemas for LLM agents before your agent uses them."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -14,11 +14,14 @@ authors = [
 ]
 keywords = [
   "mcp",
+  "model-context-protocol",
   "llm",
   "agents",
   "tool-calling",
   "json-schema",
-  "pydantic"
+  "pydantic",
+  "openai",
+  "cli"
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -50,8 +53,10 @@ dev = [
 ]
 
 [project.urls]
+Homepage = "https://github.com/ShAmoNiA/mcp-toolsmith"
 Repository = "https://github.com/ShAmoNiA/mcp-toolsmith"
 Issues = "https://github.com/ShAmoNiA/mcp-toolsmith/issues"
+Changelog = "https://github.com/ShAmoNiA/mcp-toolsmith/blob/main/CHANGELOG.md"
 
 [project.scripts]
 mcp-toolsmith = "mcp_toolsmith.cli:app"
@@ -67,9 +72,12 @@ exclude = [
   "/dist",
   "/dist_*",
   "/tools.json",
+  "/tools.py",
   "/*.zip",
   "/.pypi-install",
+  "/.pypi-*-install",
   "/.testpypi-install",
+  "/.testpypi-*-install",
   "/__pycache__",
   "/.pytest_cache",
   "/.ruff_cache",

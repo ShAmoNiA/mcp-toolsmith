@@ -1,18 +1,21 @@
 # mcp-toolsmith
 
-Audit and compile Python tool schemas for LLM agents.
+[![PyPI version](https://img.shields.io/pypi/v/mcp-toolsmith.svg)](https://pypi.org/project/mcp-toolsmith/)
+[![Python versions](https://img.shields.io/pypi/pyversions/mcp-toolsmith.svg)](https://pypi.org/project/mcp-toolsmith/)
+[![CI](https://github.com/ShAmoNiA/mcp-toolsmith/actions/workflows/ci.yml/badge.svg)](https://github.com/ShAmoNiA/mcp-toolsmith/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+`mcp-toolsmith` audits and compiles Python tool schemas for LLM agents, catching
+vague names, missing argument descriptions, oversized schemas, overlapping
+tools, and prompt-injection-like metadata before your agent uses them.
 
 **Pre-1.0:** JSON tool files are safe by default. Python files require
 `--execute` and should only be used with trusted code. The public API may change
 before `1.0.0`.
 
-`mcp-toolsmith` is a small Python-first CLI and library for checking whether tool
-metadata is usable by LLM agents, then compiling those tools into MCP or
-OpenAI-style tool definitions.
-
-It helps catch problems such as vague tool names, missing descriptions,
-oversized schemas, overlapping tools, and prompt-injection-like language inside
-tool metadata.
+Tool schemas are not just documentation. In MCP, OpenAI-style tool calling, and
+agent frameworks, names, descriptions, and input schemas shape whether the model
+chooses the right tool and fills arguments correctly.
 
 ## Install
 
@@ -24,6 +27,32 @@ For local development:
 
 ```bash
 python -m pip install -e ".[dev]"
+```
+
+## Why?
+
+LLM agents often fail because tool metadata is ambiguous.
+
+Bad tool:
+
+```python
+def run(query: str):
+    """Run operation."""
+    return query
+```
+
+Audit:
+
+```bash
+mcp-toolsmith audit tools.py --execute --all-public
+```
+
+Output:
+
+```text
+WARNING name.vague: Tool name is too generic for reliable tool selection.
+WARNING description.too_short: Tool description is too short to guide model selection.
+WARNING schema.arg_description_missing: Argument descriptions are missing for: query.
 ```
 
 ## Usage
@@ -141,6 +170,8 @@ mcp-toolsmith compile tools.py --target mcp --execute --all-public
 
 `--all-public` is mainly a compatibility path for early alpha behavior. For new
 Python tool files, prefer `@tool`.
+
+More copy-pasteable examples live in [examples](examples/).
 
 ## Python API
 
