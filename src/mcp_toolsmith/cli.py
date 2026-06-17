@@ -32,6 +32,10 @@ AllPublicOption = Annotated[
     bool,
     typer.Option("--all-public", help="Discover every public top-level function and Pydantic model."),
 ]
+FailOnOption = Annotated[
+    Literal["error", "warning", "never"],
+    typer.Option("--fail-on", help="Which finding severity should produce exit code 1."),
+]
 
 
 @app.command()
@@ -40,6 +44,7 @@ def audit(
     json_output: JsonOutputOption = False,
     execute: ExecuteOption = False,
     all_public: AllPublicOption = False,
+    fail_on: FailOnOption = "error",
 ) -> None:
     """Audit Python functions, Pydantic models, or MCP tool definitions."""
 
@@ -53,8 +58,16 @@ def audit(
         console.print_json(data=report.as_dict())
     else:
         console.print(report)
-    if report.error_count:
+    if _should_fail(report.error_count, report.warning_count, fail_on):
         raise typer.Exit(code=1)
+
+
+def _should_fail(error_count: int, warning_count: int, fail_on: str) -> bool:
+    if fail_on == "never":
+        return False
+    if fail_on == "warning":
+        return error_count > 0 or warning_count > 0
+    return error_count > 0
 
 
 @app.command(name="compile")

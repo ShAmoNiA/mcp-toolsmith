@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Add safe static auditing for `@tool`-decorated Python functions.
+- Keep `--execute` as the opt-in path for runtime/Pydantic introspection.
+- Add audit mode labels to text and JSON reports.
+- Add `--fail-on` for CI exit-code control.
+
 ## 0.2.0
 
 - Add `@tool` decorator for explicit trusted Python tool discovery.

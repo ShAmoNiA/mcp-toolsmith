@@ -9,6 +9,7 @@ from rich.console import Console
 
 Severity = Literal["info", "warning", "error"]
 SourceKind = Literal["function", "pydantic", "mcp"]
+AuditMode = Literal["static", "execute", "json"]
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,7 @@ class AuditReport:
     tools: list[ToolAudit]
     findings: list[Finding] = field(default_factory=list)
     source: Path | None = None
+    mode: AuditMode | None = None
 
     @property
     def error_count(self) -> int:
@@ -122,6 +124,8 @@ class AuditReport:
         }
         if self.source:
             payload["source"] = str(self.source)
+        if self.mode:
+            payload["mode"] = self.mode
         return payload
 
     def to_text(self) -> str:
@@ -129,6 +133,7 @@ class AuditReport:
         subject = str(self.source) if self.source else "tool catalog"
         lines = [
             f"{status} Audited {len(self.tools)} tool(s) from {subject}",
+            f"Mode: {self.mode}" if self.mode else "Mode: unknown",
             f"Errors: {self.error_count}  Warnings: {self.warning_count}",
         ]
 
@@ -167,4 +172,3 @@ def _format_finding(finding: Finding) -> str:
     if finding.suggestion:
         message += f" Suggestion: {finding.suggestion}"
     return message
-

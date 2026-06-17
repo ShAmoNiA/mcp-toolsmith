@@ -9,9 +9,9 @@
 vague names, missing argument descriptions, oversized schemas, overlapping
 tools, and prompt-injection-like metadata before your agent uses them.
 
-**Pre-1.0:** JSON tool files are safe by default. Python files require
-`--execute` and should only be used with trusted code. The public API may change
-before `1.0.0`.
+**Pre-1.0:** JSON tool files and static Python audits are safe by default.
+Python execution requires `--execute` and should only be used with trusted code.
+The public API may change before `1.0.0`.
 
 Tool schemas are not just documentation. In MCP, OpenAI-style tool calling, and
 agent frameworks, names, descriptions, and input schemas shape whether the model
@@ -44,7 +44,7 @@ def run(query: str):
 Audit:
 
 ```bash
-mcp-toolsmith audit tools.py --execute --all-public
+mcp-toolsmith audit tools.py --execute --all-public --fail-on warning
 ```
 
 Output:
@@ -119,17 +119,13 @@ mcp-toolsmith compile tools.json --target openai
 
 ### Audit trusted Python files
 
-Python files are executable source code, so `mcp-toolsmith` refuses to import
-them unless you opt in:
+Python files are parsed statically by default:
 
 ```bash
-mcp-toolsmith audit tools.py --execute
-mcp-toolsmith compile tools.py --target mcp --execute
+mcp-toolsmith audit tools.py
 ```
 
-Use `--execute` only for trusted files.
-
-By default, Python discovery only includes functions decorated with `@tool`:
+This discovers `@tool`-decorated functions without executing the file:
 
 ```python
 from mcp_toolsmith import tool
@@ -145,6 +141,18 @@ def search_docs(query: str, limit: int = 5) -> list[str]:
     """
     return []
 ```
+
+Static mode maps common annotations such as `str`, `int`, `float`, `bool`,
+`dict`, and `list[str]`. Use runtime execution only for trusted files when you
+need full Pydantic/runtime schema generation:
+
+```bash
+mcp-toolsmith audit tools.py --execute
+mcp-toolsmith compile tools.py --target mcp --execute
+```
+
+Use `--execute` only for trusted files. In both static and execution modes,
+default Python discovery only includes functions decorated with `@tool`.
 
 Use decorator arguments to override the generated tool name or description:
 
@@ -171,6 +179,16 @@ mcp-toolsmith compile tools.py --target mcp --execute --all-public
 `--all-public` is mainly a compatibility path for early alpha behavior. For new
 Python tool files, prefer `@tool`.
 
+Use `--fail-on` to tune CI behavior:
+
+```bash
+mcp-toolsmith audit tools.py --fail-on error
+mcp-toolsmith audit tools.py --fail-on warning
+mcp-toolsmith audit tools.py --fail-on never
+```
+
+The default is `error`.
+
 More copy-pasteable examples live in [examples](examples/).
 
 ## Python API
@@ -188,6 +206,7 @@ openai_tools = compile_file("tools.json", target="openai")
 For trusted Python files:
 
 ```python
+report = audit_file("tools.py")
 report = audit_file("tools.py", execute=True)
 mcp_tools = compile_file("tools.py", target="mcp", execute=True)
 ```
@@ -215,7 +234,7 @@ mcp_tools = compile_file("tools.py", target="mcp", execute=True, all_public=True
 | Version | Goal |
 | --- | --- |
 | `0.2.0` | Decorator-based Python tool discovery |
-| `0.3.0` | OpenAPI input and richer JSON Schema validation |
+| `0.3.0` | Safe static audit for `@tool`-decorated Python functions |
 | `0.4.0` | Provider compatibility profiles for Anthropic, Gemini, and OpenAI |
 | `0.5.0` | Deterministic schema compaction and rewriting |
 | `1.0.0` | Stable public API and compatibility matrix |
@@ -223,4 +242,3 @@ mcp_tools = compile_file("tools.py", target="mcp", execute=True, all_public=True
 ## License
 
 MIT
-

@@ -16,7 +16,8 @@ from mcp_toolsmith.introspection import (
     mcp_definition_to_tool_schema,
     pydantic_model_to_tool_schema,
 )
-from mcp_toolsmith.models import AuditReport, Finding, ToolAudit, ToolSchema
+from mcp_toolsmith.models import AuditMode, AuditReport, Finding, ToolAudit, ToolSchema
+from mcp_toolsmith.static_introspection import load_static_tool_schemas
 
 _GOOD_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{1,63}$")
 _VAGUE_NAMES = {
@@ -54,9 +55,17 @@ def audit_file(
     """Audit all tools discovered in a Python or MCP JSON file."""
 
     source = Path(path)
+    mode = "json"
+    if source.suffix.lower() == ".py":
+        mode = "execute" if execute else "static"
+    if source.suffix.lower() == ".py" and not execute:
+        tools = load_static_tool_schemas(source)
+    else:
+        tools = load_tool_schemas(source, execute_python=execute, all_public=all_public)
     return audit_tools(
-        load_tool_schemas(source, execute_python=execute, all_public=all_public),
+        tools,
         source=source,
+        mode=mode,
     )
 
 
@@ -71,7 +80,7 @@ def audit_tool(tool: ToolSchema | Callable[..., Any] | type[BaseModel] | dict[st
     return ToolAudit(tool=schema, findings=_audit_one(schema))
 
 
-def audit_tools(tools: list[ToolSchema], source: Path | None = None) -> AuditReport:
+def audit_tools(tools: list[ToolSchema], source: Path | None = None, mode: AuditMode | None = None) -> AuditReport:
     """Audit a catalog of provider-neutral tool schemas."""
 
     tool_audits = [audit_tool(tool) for tool in tools]
@@ -81,14 +90,19 @@ def audit_tools(tools: list[ToolSchema], source: Path | None = None) -> AuditRep
             Finding(
                 rule_id="catalog.no_tools",
                 severity="warning",
-                message="No tools were discovered.",
+                message=(
+                    "No @tool-decorated functions were discovered."
+                    if mode == "static"
+                    else "No tools were discovered."
+                ),
                 suggestion=(
-                    "Add MCP JSON definitions, decorate trusted Python functions with @tool, "
-                    "or use --all-public."
+                    "Add @tool or use --execute --all-public for trusted files."
+                    if mode == "static"
+                    else "Add MCP JSON definitions, decorate trusted Python functions with @tool, or use --all-public."
                 ),
             )
         )
-    return AuditReport(tools=tool_audits, findings=findings, source=source)
+    return AuditReport(tools=tool_audits, findings=findings, source=source, mode=mode)
 
 
 def _coerce_tool_schema(tool: ToolSchema | Callable[..., Any] | type[BaseModel] | dict[str, Any]) -> ToolSchema:
@@ -301,6 +315,37 @@ def _audit_schema(tool: ToolSchema) -> list[Finding]:
 
 def _audit_python_metadata(tool: ToolSchema) -> list[Finding]:
     findings: list[Finding] = []
+    for parameter_name in tool.metadata.get("static_variadic_parameters", []):
+        findings.append(
+            Finding(
+                rule_id="python.variadic_parameter",
+                severity="error",
+                message=f"Variadic parameter {parameter_name!r} cannot be represented reliably.",
+                location=tool.source,
+                suggestion="Replace *args/**kwargs with explicit typed parameters.",
+            )
+        )
+    for parameter_name in tool.metadata.get("static_missing_annotations", []):
+        findings.append(
+            Finding(
+                rule_id="python.annotation_missing",
+                severity="warning",
+                message=f"Parameter {parameter_name!r} is missing a type annotation.",
+                location=tool.source,
+                suggestion="Add a Python type annotation so the JSON Schema is specific.",
+            )
+        )
+    for parameter_name in tool.metadata.get("static_unknown_annotations", []):
+        findings.append(
+            Finding(
+                rule_id="python.static_annotation_unknown",
+                severity="warning",
+                message=f"Parameter {parameter_name!r} has a type annotation static audit cannot map yet.",
+                location=tool.source,
+                suggestion="Use str, int, float, bool, list[T], or dict for static audit, or use --execute.",
+            )
+        )
+
     function = tool.metadata.get("callable")
     if not function:
         return findings

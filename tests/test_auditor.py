@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-from mcp_toolsmith import UnsafePythonExecutionError, audit_file, audit_tool, tool
+from mcp_toolsmith import audit_file, audit_tool, tool
 
 
 def test_audit_file_finds_missing_description_and_annotation(tmp_path):
@@ -26,16 +24,16 @@ def run(query):
     assert "python.annotation_missing" in rule_ids
 
 
-def test_audit_file_refuses_python_without_execute_and_does_not_run_top_level_code(tmp_path):
+def test_static_audit_does_not_execute_python_file(tmp_path):
     marker = tmp_path / "executed.txt"
     tools_file = tmp_path / "tools.py"
     tools_file.write_text(
         f"""
+from mcp_toolsmith import tool
 from pathlib import Path
 
-Path({str(marker)!r}).write_text("executed", encoding="utf-8")
 
-
+@tool
 def search_docs(query: str) -> str:
     \"\"\"Search documentation for a specific user question.
 
@@ -43,17 +41,21 @@ def search_docs(query: str) -> str:
         query: Question to search for.
     \"\"\"
     return query
+
+
+Path({str(marker)!r}).write_text("executed", encoding="utf-8")
 """,
         encoding="utf-8",
     )
 
-    with pytest.raises(UnsafePythonExecutionError):
-        audit_file(tools_file)
+    report = audit_file(tools_file)
 
+    assert [tool_audit.tool.name for tool_audit in report.tools] == ["search_docs"]
+    assert report.mode == "static"
     assert not marker.exists()
 
 
-def test_decorated_function_is_discovered_with_execute(tmp_path):
+def test_static_audit_discovers_decorated_function(tmp_path):
     tools_file = tmp_path / "tools.py"
     tools_file.write_text(
         '''
@@ -77,12 +79,12 @@ def normalize_query(query: str) -> str:
         encoding="utf-8",
     )
 
-    report = audit_file(tools_file, execute=True)
+    report = audit_file(tools_file)
 
     assert [tool_audit.tool.name for tool_audit in report.tools] == ["search_docs"]
 
 
-def test_public_helper_function_is_not_discovered_by_default(tmp_path):
+def test_static_audit_ignores_public_helper_by_default(tmp_path):
     tools_file = tmp_path / "tools.py"
     tools_file.write_text(
         '''
@@ -99,6 +101,26 @@ def normalize_query(query: str) -> str:
     assert any(finding.rule_id == "catalog.no_tools" for finding in report.findings)
 
 
+def test_static_audit_reports_no_decorated_tools(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+def normalize_query(query: str) -> str:
+    """Normalize helper input."""
+    return query.strip().lower()
+''',
+        encoding="utf-8",
+    )
+
+    report = audit_file(tools_file)
+
+    assert report.tools == []
+    finding = report.findings[0]
+    assert finding.rule_id == "catalog.no_tools"
+    assert finding.message == "No @tool-decorated functions were discovered."
+    assert finding.suggestion == "Add @tool or use --execute --all-public for trusted files."
+
+
 def test_all_public_discovers_public_helper_function(tmp_path):
     tools_file = tmp_path / "tools.py"
     tools_file.write_text(
@@ -113,6 +135,134 @@ def normalize_query(query: str) -> str:
     report = audit_file(tools_file, execute=True, all_public=True)
 
     assert [tool_audit.tool.name for tool_audit in report.tools] == ["normalize_query"]
+
+
+def test_static_audit_reads_docstring_arg_descriptions(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+from mcp_toolsmith import tool
+
+
+@tool
+def search_docs(query: str, limit: int = 5) -> list[str]:
+    """Search project documentation by natural language query.
+
+    Args:
+        query: Question or topic to search for.
+        limit: Maximum number of results to return.
+    """
+    return []
+''',
+        encoding="utf-8",
+    )
+
+    report = audit_file(tools_file)
+    schema = report.tools[0].tool.input_schema
+
+    assert schema["properties"]["query"]["description"] == "Question or topic to search for."
+    assert schema["properties"]["limit"]["description"] == "Maximum number of results to return."
+    assert schema["properties"]["limit"]["default"] == 5
+    assert schema["properties"]["query"]["type"] == "string"
+    assert schema["properties"]["limit"]["type"] == "integer"
+    assert schema["required"] == ["query"]
+
+
+def test_static_audit_supports_tool_name_override(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+from mcp_toolsmith import tool
+
+
+@tool(name="search_project_docs")
+def search_docs(query: str) -> str:
+    """Search project documentation by natural language query.
+
+    Args:
+        query: Question or topic to search for.
+    """
+    return query
+''',
+        encoding="utf-8",
+    )
+
+    report = audit_file(tools_file)
+
+    assert report.tools[0].tool.name == "search_project_docs"
+
+
+def test_static_audit_supports_tool_description_override(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+from mcp_toolsmith import tool
+
+
+@tool(description="Search project docs and return matching document identifiers.")
+def search_docs(query: str) -> str:
+    """Ignored fallback description.
+
+    Args:
+        query: Question or topic to search for.
+    """
+    return query
+''',
+        encoding="utf-8",
+    )
+
+    report = audit_file(tools_file)
+
+    assert report.tools[0].tool.description == "Search project docs and return matching document identifiers."
+
+
+def test_static_audit_supports_qualified_tool_decorator(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+import mcp_toolsmith
+
+
+@mcp_toolsmith.tool
+def search_docs(query: str) -> str:
+    """Search project documentation by natural language query.
+
+    Args:
+        query: Question or topic to search for.
+    """
+    return query
+''',
+        encoding="utf-8",
+    )
+
+    report = audit_file(tools_file)
+
+    assert [tool_audit.tool.name for tool_audit in report.tools] == ["search_docs"]
+
+
+def test_static_audit_warns_for_unknown_annotation(tmp_path):
+    tools_file = tmp_path / "tools.py"
+    tools_file.write_text(
+        '''
+from mcp_toolsmith import tool
+
+
+@tool
+def search_docs(query: CustomQuery) -> str:
+    """Search project documentation by natural language query.
+
+    Args:
+        query: Question or topic to search for.
+    """
+    return ""
+''',
+        encoding="utf-8",
+    )
+
+    report = audit_file(tools_file)
+    rule_ids = {finding.rule_id for finding in report.tools[0].findings}
+
+    assert "python.static_annotation_unknown" in rule_ids
 
 
 def test_tool_decorator_can_override_name():
