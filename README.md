@@ -97,6 +97,8 @@ Example audit output:
 
 ```text
 OK Audited 1 tool(s) from tools.json
+Mode: json
+Profile: generic
 Errors: 0  Warnings: 0
 
 search_docs [mcp] ~55 schema tokens
@@ -189,6 +191,29 @@ mcp-toolsmith audit tools.py --fail-on never
 
 The default is `error`.
 
+### Provider compatibility profiles
+
+Audit a tool schema for OpenAI-style tool calling:
+
+```bash
+mcp-toolsmith audit tools.py --profile openai
+```
+
+Audit a tool schema for MCP compatibility:
+
+```bash
+mcp-toolsmith audit tools.py --profile mcp
+```
+
+Use this in CI:
+
+```bash
+mcp-toolsmith audit tools.py --profile openai --fail-on warning
+```
+
+The default profile is `generic`, which keeps the provider-neutral audit
+behavior from earlier releases.
+
 More copy-pasteable examples live in [examples](examples/).
 
 ## Python API
@@ -197,7 +222,9 @@ More copy-pasteable examples live in [examples](examples/).
 from mcp_toolsmith import audit_file, compile_file
 
 report = audit_file("tools.json")
+openai_report = audit_file("tools.json", profile="openai")
 report.print()
+openai_report.print()
 
 mcp_tools = compile_file("tools.json", target="mcp")
 openai_tools = compile_file("tools.json", target="openai")
@@ -235,7 +262,7 @@ mcp_tools = compile_file("tools.py", target="mcp", execute=True, all_public=True
 | --- | --- |
 | `0.2.0` | Decorator-based Python tool discovery |
 | `0.3.0` | Safe static audit for `@tool`-decorated Python functions |
-| `0.4.0` | Provider compatibility profiles for Anthropic, Gemini, and OpenAI |
+| `0.4.0` | Provider compatibility profiles for OpenAI and MCP tool schemas |
 | `0.5.0` | Deterministic schema compaction and rewriting |
 | `1.0.0` | Stable public API and compatibility matrix |
 

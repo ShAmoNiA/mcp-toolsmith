@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from mcp_toolsmith import audit_file, audit_tool, tool
+from mcp_toolsmith import ToolSchema, audit_file, audit_tool, tool
 
 
 def test_audit_file_finds_missing_description_and_annotation(tmp_path):
@@ -432,3 +432,139 @@ def search_documents(query: str) -> str:
     report = audit_file(tools_file, execute=True, all_public=True)
 
     assert any(finding.rule_id == "catalog.overlap" for finding in report.findings)
+
+
+def test_openai_profile_rejects_invalid_tool_name():
+    result = audit_tool(
+        {
+            "name": "search docs!",
+            "description": "Search documentation for a specific user question.",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        profile="openai",
+    )
+
+    assert any(finding.rule_id == "openai.name.invalid" for finding in result.findings)
+
+
+def test_openai_profile_warns_on_deep_schema():
+    result = audit_tool(
+        {
+            "name": "search_documents",
+            "description": "Search documentation for a specific user question.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "object",
+                        "description": "Structured search query.",
+                        "properties": {
+                            "filters": {
+                                "type": "object",
+                                "description": "Search filters.",
+                                "properties": {
+                                    "metadata": {
+                                        "type": "object",
+                                        "description": "Metadata filters.",
+                                        "properties": {
+                                            "owner": {
+                                                "type": "string",
+                                                "description": "Document owner.",
+                                            }
+                                        },
+                                    }
+                                },
+                            }
+                        },
+                    }
+                },
+            },
+        },
+        profile="openai",
+    )
+
+    assert any(finding.rule_id == "openai.schema.too_deep" for finding in result.findings)
+
+
+def test_openai_profile_warns_on_large_enum():
+    result = audit_tool(
+        {
+            "name": "search_documents",
+            "description": "Search documentation for a specific user question.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "Document category.",
+                        "enum": [f"category_{index}" for index in range(25)],
+                    }
+                },
+            },
+        },
+        profile="openai",
+    )
+
+    assert any(finding.rule_id == "openai.schema.large_enum" for finding in result.findings)
+
+
+def test_mcp_profile_requires_object_input_schema():
+    result = audit_tool(
+        ToolSchema(
+            name="refresh_consent",
+            description="Refresh the consent status for a connected bank account.",
+            input_schema={"type": "string"},
+            source="<test>",
+            source_kind="mcp",
+        ),
+        profile="mcp",
+    )
+
+    assert any(finding.rule_id == "mcp.input_schema.not_object" for finding in result.findings)
+
+
+def test_mcp_profile_warns_on_missing_arg_descriptions():
+    result = audit_tool(
+        {
+            "name": "refresh_consent",
+            "description": "Refresh the consent status for a connected bank account.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string"},
+                    "bank_id": {"type": "string"},
+                },
+                "required": ["user_id", "bank_id"],
+            },
+        },
+        profile="mcp",
+    )
+
+    missing_description = next(
+        finding for finding in result.findings if finding.rule_id == "mcp.input_schema.arg_description_missing"
+    )
+    assert "user_id, bank_id" in missing_description.message
+
+
+def test_generic_profile_keeps_existing_behavior(tmp_path):
+    tools_file = tmp_path / "tools.json"
+    tools_file.write_text(
+        json.dumps(
+            {
+                "name": "search docs!",
+                "description": "Search docs.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = audit_file(tools_file)
+    rule_ids = {finding.rule_id for tool_audit in report.tools for finding in tool_audit.findings}
+
+    assert report.profile == "generic"
+    assert "name.format" in rule_ids
+    assert not any(rule_id.startswith(("openai.", "mcp.")) for rule_id in rule_ids)

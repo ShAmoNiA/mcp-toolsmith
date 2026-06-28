@@ -171,3 +171,24 @@ def search_docs(query: str) -> str:
 
     assert result.exit_code == 1
     assert "Warnings:" in result.output
+
+
+def test_cli_audit_json_includes_profile(tmp_path):
+    tools_file = tmp_path / "tools.json"
+    tools_file.write_text(
+        json.dumps(
+            {
+                "name": "run",
+                "description": "Run task.",
+                "inputSchema": {"type": "object", "properties": {}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["audit", str(tools_file), "--profile", "openai", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["profile"] == "openai"
+    assert any(finding["rule_id"] == "openai.name.vague" for finding in payload["warnings"])

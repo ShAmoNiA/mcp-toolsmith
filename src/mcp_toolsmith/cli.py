@@ -36,6 +36,10 @@ FailOnOption = Annotated[
     Literal["error", "warning", "never"],
     typer.Option("--fail-on", help="Which finding severity should produce exit code 1."),
 ]
+ProfileOption = Annotated[
+    Literal["generic", "openai", "mcp"],
+    typer.Option("--profile", help="Compatibility profile to audit against."),
+]
 
 
 @app.command()
@@ -44,12 +48,13 @@ def audit(
     json_output: JsonOutputOption = False,
     execute: ExecuteOption = False,
     all_public: AllPublicOption = False,
+    profile: ProfileOption = "generic",
     fail_on: FailOnOption = "error",
 ) -> None:
     """Audit Python functions, Pydantic models, or MCP tool definitions."""
 
     try:
-        report = audit_file(path, execute=execute, all_public=all_public)
+        report = audit_file(path, execute=execute, all_public=all_public, profile=profile)
     except Exception as exc:
         console.print(f"[red]ERROR[/red] {exc}")
         raise typer.Exit(code=2) from exc

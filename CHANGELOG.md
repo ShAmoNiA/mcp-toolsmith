@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Add provider compatibility profiles with `--profile generic`, `--profile openai`,
+  and `--profile mcp`.
+- Add OpenAI-style checks for names, loose schemas, deep nesting, large enums,
+  array item schemas, and ignored JSON Schema keywords.
+- Add MCP checks for `inputSchema` shape, required fields, missing argument
+  descriptions, large schemas, and duplicate or overlapping tool names.
+- Include the active audit profile in text and JSON reports.
+
 ## 0.3.0
 
 - Add safe static auditing for `@tool`-decorated Python functions.

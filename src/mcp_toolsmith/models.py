@@ -10,6 +10,7 @@ from rich.console import Console
 Severity = Literal["info", "warning", "error"]
 SourceKind = Literal["function", "pydantic", "mcp"]
 AuditMode = Literal["static", "execute", "json"]
+AuditProfile = Literal["generic", "openai", "mcp"]
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,7 @@ class ToolSchema:
 
     name: str
     description: str
-    input_schema: dict[str, Any]
+    input_schema: Any
     source: str
     source_kind: SourceKind
     metadata: dict[str, Any] = field(default_factory=dict, repr=False)
@@ -97,6 +98,7 @@ class AuditReport:
     findings: list[Finding] = field(default_factory=list)
     source: Path | None = None
     mode: AuditMode | None = None
+    profile: AuditProfile = "generic"
 
     @property
     def error_count(self) -> int:
@@ -117,10 +119,13 @@ class AuditReport:
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "passed": self.passed,
+            "profile": self.profile,
             "error_count": self.error_count,
             "warning_count": self.warning_count,
             "tools": [tool.as_dict() for tool in self.tools],
             "findings": [finding.as_dict() for finding in self.findings],
+            "errors": self._findings_by_severity("error"),
+            "warnings": self._findings_by_severity("warning"),
         }
         if self.source:
             payload["source"] = str(self.source)
@@ -128,12 +133,27 @@ class AuditReport:
             payload["mode"] = self.mode
         return payload
 
+    def _findings_by_severity(self, severity: Severity) -> list[dict[str, Any]]:
+        findings: list[dict[str, Any]] = []
+        for finding in self.findings:
+            if finding.severity == severity:
+                findings.append(finding.as_dict())
+        for tool_audit in self.tools:
+            for finding in tool_audit.findings:
+                if finding.severity != severity:
+                    continue
+                payload = finding.as_dict()
+                payload["tool"] = tool_audit.tool.name
+                findings.append(payload)
+        return findings
+
     def to_text(self) -> str:
         status = "[green]OK[/green]" if self.passed else "[red]FAILED[/red]"
         subject = str(self.source) if self.source else "tool catalog"
         lines = [
             f"{status} Audited {len(self.tools)} tool(s) from {subject}",
             f"Mode: {self.mode}" if self.mode else "Mode: unknown",
+            f"Profile: {self.profile}",
             f"Errors: {self.error_count}  Warnings: {self.warning_count}",
         ]
 
