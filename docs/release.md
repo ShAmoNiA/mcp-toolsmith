@@ -36,7 +36,7 @@ Then test installation in a clean virtual environment:
 ```bash
 python -m venv .test-venv
 .test-venv\Scripts\activate
-python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mcp-toolsmith==0.4.0
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple mcp-toolsmith==0.5.0
 mcp-toolsmith --help
 ```
 

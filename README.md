@@ -57,6 +57,47 @@ WARNING schema.arg_description_missing: Argument descriptions are missing for: q
 
 ## Usage
 
+### Audit a project
+
+Recursively audit supported Python and MCP JSON files:
+
+```bash
+mcp-toolsmith audit .
+mcp-toolsmith audit src/
+mcp-toolsmith audit src/tools/
+```
+
+Generated output, virtual environments, dependency directories, and common
+caches are excluded by default. Add explicit globs when needed:
+
+```bash
+mcp-toolsmith audit . --exclude "tests/**" --exclude "examples/**"
+```
+
+Store repeatable CI settings in `pyproject.toml`:
+
+```toml
+[tool.mcp-toolsmith]
+profile = "openai"
+fail-on = "warning"
+include = ["src/**/*.py"]
+exclude = ["tests/**", "examples/**", "src/generated/**"]
+ignore = ["schema.description_too_short"]
+max-schema-depth = 5
+
+[[tool.mcp-toolsmith.per-file-ignores]]
+path = "examples/**"
+rules = ["schema.arg_description_missing"]
+```
+
+CLI values override project configuration, which overrides built-in defaults.
+Suppressions require specific rule codes. Inspect the settings used by the
+current project with:
+
+```bash
+mcp-toolsmith config show
+```
+
 ### Audit JSON tool definitions
 
 JSON tool definitions are safe by default:

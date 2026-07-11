@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Add recursive repository-wide auditing for Python and MCP JSON files.
+- Add `pyproject.toml` configuration with CLI-over-project-over-default precedence.
+- Add include/exclude globs, specific rule suppression, and per-file ignores.
+- Add file, line, and column locations to static Python findings and JSON reports.
+- Add `mcp-toolsmith config show` for inspecting effective configuration.
+
 ## 0.4.0
 
 - Add provider compatibility profiles with `--profile generic`, `--profile openai`,

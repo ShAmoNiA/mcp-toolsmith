@@ -87,11 +87,12 @@ def audit_file(
     execute: bool = False,
     all_public: bool = False,
     profile: AuditProfile = "generic",
+    max_schema_depth: int = 5,
 ) -> AuditReport:
     """Audit all tools discovered in a Python or MCP JSON file."""
 
     source = Path(path)
-    mode = "json"
+    mode: AuditMode = "json"
     if source.suffix.lower() == ".py":
         mode = "execute" if execute else "static"
     if source.suffix.lower() == ".json":
@@ -105,6 +106,7 @@ def audit_file(
         source=source,
         mode=mode,
         profile=profile,
+        max_schema_depth=max_schema_depth,
     )
 
 
@@ -112,6 +114,7 @@ def audit_tool(
     tool: ToolSchema | Callable[..., Any] | type[BaseModel] | dict[str, Any],
     *,
     profile: AuditProfile = "generic",
+    max_schema_depth: int = 5,
 ) -> ToolAudit:
     """Audit one tool-like object.
 
@@ -120,7 +123,7 @@ def audit_tool(
     """
 
     schema = _coerce_tool_schema(tool)
-    return ToolAudit(tool=schema, findings=_audit_one(schema, profile=profile))
+    return ToolAudit(tool=schema, findings=_audit_one(schema, profile=profile, max_schema_depth=max_schema_depth))
 
 
 def audit_tools(
@@ -129,11 +132,12 @@ def audit_tools(
     mode: AuditMode | None = None,
     *,
     profile: AuditProfile = "generic",
+    max_schema_depth: int = 5,
 ) -> AuditReport:
     """Audit a catalog of provider-neutral tool schemas."""
 
     _validate_profile(profile)
-    tool_audits = [audit_tool(tool, profile=profile) for tool in tools]
+    tool_audits = [audit_tool(tool, profile=profile, max_schema_depth=max_schema_depth) for tool in tools]
     findings = _audit_catalog(tools)
     findings.extend(_audit_catalog_for_profile(tools, profile))
     if not tools:
@@ -142,9 +146,7 @@ def audit_tools(
                 rule_id="catalog.no_tools",
                 severity="warning",
                 message=(
-                    "No @tool-decorated functions were discovered."
-                    if mode == "static"
-                    else "No tools were discovered."
+                    "No @tool-decorated functions were discovered." if mode == "static" else "No tools were discovered."
                 ),
                 suggestion=(
                     "Add @tool or use --execute --all-public for trusted files."
@@ -187,7 +189,7 @@ def _load_json_tool_schemas_for_audit(path: Path) -> list[ToolSchema]:
     if not all(isinstance(definition, dict) for definition in definitions):
         raise ValueError("Every JSON tool definition must be an object")
     return [
-        _mcp_definition_to_tool_schema_for_audit(definition, source=f"{path}:{index}")
+        _mcp_definition_to_tool_schema_for_audit(definition, source=str(path))
         for index, definition in enumerate(definitions)
     ]
 
@@ -207,13 +209,13 @@ def _mcp_definition_to_tool_schema_for_audit(definition: dict[str, Any], source:
     )
 
 
-def _audit_one(tool: ToolSchema, *, profile: AuditProfile) -> list[Finding]:
+def _audit_one(tool: ToolSchema, *, profile: AuditProfile, max_schema_depth: int) -> list[Finding]:
     findings: list[Finding] = []
     findings.extend(_audit_name(tool))
     findings.extend(_audit_description(tool))
     findings.extend(_audit_schema(tool))
     findings.extend(_audit_python_metadata(tool))
-    findings.extend(_audit_tool_for_profile(tool, profile))
+    findings.extend(_audit_tool_for_profile(tool, profile, max_schema_depth))
     return findings
 
 
@@ -466,17 +468,17 @@ def _audit_python_metadata(tool: ToolSchema) -> list[Finding]:
     return findings
 
 
-def _audit_tool_for_profile(tool: ToolSchema, profile: AuditProfile) -> list[Finding]:
+def _audit_tool_for_profile(tool: ToolSchema, profile: AuditProfile, max_schema_depth: int) -> list[Finding]:
     if profile == "generic":
         return []
     if profile == "openai":
-        return _audit_openai_tool(tool)
+        return _audit_openai_tool(tool, max_schema_depth)
     if profile == "mcp":
         return _audit_mcp_tool(tool)
     return []
 
 
-def _audit_openai_tool(tool: ToolSchema) -> list[Finding]:
+def _audit_openai_tool(tool: ToolSchema, max_schema_depth: int = 5) -> list[Finding]:
     findings: list[Finding] = []
     name = tool.name.strip()
     if not name:
@@ -495,8 +497,7 @@ def _audit_openai_tool(tool: ToolSchema) -> list[Finding]:
                 rule_id="openai.name.too_long",
                 severity="error",
                 message=(
-                    f"Tool name {name!r} is {len(name)} characters; "
-                    "OpenAI-style names must be 64 characters or fewer."
+                    f"Tool name {name!r} is {len(name)} characters; OpenAI-style names must be 64 characters or fewer."
                 ),
                 location=tool.source,
                 suggestion="Shorten the tool name while keeping a clear verb_noun shape.",
@@ -570,7 +571,7 @@ def _audit_openai_tool(tool: ToolSchema) -> list[Finding]:
     findings.extend(_audit_openai_generic_properties(schema, tool.source))
 
     nesting_depth = _schema_nesting_depth(schema)
-    if nesting_depth > 5:
+    if nesting_depth > max_schema_depth:
         findings.append(
             Finding(
                 rule_id="openai.schema.too_deep",
@@ -700,6 +701,7 @@ def _audit_catalog(tools: list[ToolSchema]) -> list[Finding]:
                         rule_id="catalog.overlap",
                         severity="warning",
                         message=f"Tools {left.name!r} and {right.name!r} look semantically overlapping.",
+                        location=left.source,
                         suggestion="Merge them, rename one more specifically, or clarify their descriptions.",
                     )
                 )
@@ -737,6 +739,7 @@ def _audit_catalog_for_profile(tools: list[ToolSchema], profile: AuditProfile) -
                         rule_id="mcp.catalog.overlap",
                         severity="warning",
                         message=f"MCP tools {left.name!r} and {right.name!r} look semantically overlapping.",
+                        location=left.source,
                         suggestion="Rename or clarify descriptions so clients and models can distinguish them.",
                     )
                 )
@@ -983,11 +986,7 @@ def _audit_openai_ignored_keywords(schema: dict[str, Any], source: str) -> list[
 
 def _tokenize(text: str) -> set[str]:
     stopwords = {"a", "an", "and", "for", "from", "in", "of", "or", "the", "to", "with"}
-    return {
-        token
-        for token in re.split(r"[^a-zA-Z0-9]+", text.lower())
-        if len(token) > 2 and token not in stopwords
-    }
+    return {token for token in re.split(r"[^a-zA-Z0-9]+", text.lower()) if len(token) > 2 and token not in stopwords}
 
 
 def _jaccard(left: set[str], right: set[str]) -> float:

@@ -34,7 +34,7 @@ def load_static_tool_schemas(path: str | Path) -> list[ToolSchema]:
                 name=tool_name,
                 description=tool_description,
                 input_schema=input_schema,
-                source=f"{source_path}:{node.lineno}",
+                source=f"{source_path}:{node.lineno}:{node.col_offset + 1}",
                 source_kind="function",
                 metadata=metadata,
             )
